@@ -2,7 +2,7 @@
 const mqtt = require('mqtt');
 
 const CONFIG = {
-  broker: 'mqtt://mqtt.zacloud.bjzatx.com',
+  broker: 'mqtt://172.16.18.95',
   port: 1883,
   username: 'nic9dzyn',
   password: '587212ee97e29d80471f33cf333b83a5374ede65adccd16338d6bebebf4be224',

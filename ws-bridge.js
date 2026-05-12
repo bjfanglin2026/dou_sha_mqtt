@@ -7,7 +7,7 @@ const WebSocket = require('ws');
 const mqtt = require('mqtt');
 
 const WS_PORT = 8788;          // 浏览器连接本服务的端口
-const MQTT_BROKER = 'mqtt://mqtt.zacloud.bjzatx.com';
+const MQTT_BROKER = 'mqtt://172.16.18.95';
 const MQTT_PORT = 1883;
 const MQTT_USER = 'nic9dzyn';
 const MQTT_PASS = '587212ee97e29d80471f33cf333b83a5374ede65adccd16338d6bebebf4be224';
