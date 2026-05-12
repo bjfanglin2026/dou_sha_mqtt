@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>豆沙机 MQTT 测试工具</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1419; color: #e7e9ea; min-height: 100vh; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 6px; color: #4ade80; }
+  .subtitle { font-size: 13px; color: #8899a6; margin-bottom: 20px; }
+
+  .card { background: #1c2732; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; color: #8899a6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; background: #38434d; }
+  .card-title .dot.connected { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+  .card-title .dot.error { background: #f87171; }
+  .card-title .dot.active { background: #60a5fa; box-shadow: 0 0 6px #60a5fa; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: #8899a6; margin-bottom: 5px; }
+  input, select, textarea { width: 100%; background: #0f1419; border: 1px solid #38434d; border-radius: 8px; color: #e7e9ea; font-size: 13px; padding: 8px 12px; outline: none; transition: border-color 0.2s; }
+  input:focus, textarea:focus { border-color: #4ade80; }
+  textarea { resize: vertical; min-height: 80px; font-family: 'Courier New', monospace; }
+  input[type="checkbox"] { width: auto; }
+  input:disabled, textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  button { padding: 8px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-connect { background: #4ade80; color: #0f1419; }
+  .btn-connect:hover { background: #22c55e; }
+  .btn-connect:disabled { background: #38434d; color: #8899a6; cursor: not-allowed; }
+  .btn-disconnect { background: #f87171; color: #fff; }
+  .btn-disconnect:hover { background: #ef4444; }
+  .btn-disconnect:disabled { background: #38434d; color: #8899a6; cursor: not-allowed; }
+  .btn-clear { background: #38434d; color: #e7e9ea; }
+  .btn-clear:hover { background: #4a5568; }
+  .btn-send { background: #60a5fa; color: #fff; }
+  .btn-send:hover { background: #3b82f6; }
+  .btn-send:disabled { background: #38434d; color: #8899a6; cursor: not-allowed; }
+
+  /* 状态 */
+  .status-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 10px; }
+  .status-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .status-badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-green { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .badge-red { background: rgba(248,113,113,0.15); color: #f87171; }
+  .badge-gray { background: rgba(136,153,166,0.15); color: #8899a6; }
+  .badge-blue { background: rgba(96,165,250,0.15); color: #60a5fa; }
+
+  /* 消息日志 */
+  .log-container { background: #0f1419; border: 1px solid #38434d; border-radius: 8px; height: 340px; overflow-y: auto; padding: 12px; font-family: 'Courier New', monospace; font-size: 12px; }
+  .log-entry { margin-bottom: 6px; line-height: 1.5; word-break: break-all; }
+  .log-ts { color: #8899a6; margin-right: 6px; }
+  .log-recv { color: #4ade80; }
+  .log-sent { color: #60a5fa; }
+  .log-sys { color: #f59e0b; }
+  .log-error { color: #f87171; }
+  .log-sub { color: #c084fc; }
+
+  /* 设备状态面板 */
+  .device-state { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .state-card { background: #0f1419; border: 1px solid #38434d; border-radius: 8px; padding: 12px; text-align: center; transition: border-color 0.2s; }
+  .state-card.active { border-color: #4ade80; background: rgba(74,222,128,0.05); }
+  .state-card.warn { border-color: #f59e0b; background: rgba(245,158,11,0.05); }
+  .state-name { font-size: 11px; color: #8899a6; margin-bottom: 6px; }
+  .state-value { font-size: 22px; font-weight: 700; color: #e7e9ea; }
+  .state-card.active .state-value { color: #4ade80; }
+  .state-card.warn .state-value { color: #f59e0b; }
+  .state-desc { font-size: 10px; color: #8899a6; margin-top: 4px; }
+
+  /* 快速下发 */
+  .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .quick-btn { padding: 6px 14px; border-radius: 6px; border: 1px solid #38434d; background: #0f1419; color: #e7e9ea; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+  .quick-btn:hover { border-color: #60a5fa; color: #60a5fa; }
+  .quick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 订单列表 */
+  .order-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .order-table th { padding: 6px 10px; text-align: left; color: #8899a6; font-weight: 600; border-bottom: 1px solid #38434d; }
+  .order-table td { padding: 6px 10px; border-bottom: 1px solid #1c2732; color: #e7e9ea; }
+  .order-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .badge-received { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .badge-confirmed { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .badge-completed { background: rgba(74,222,128,0.3); color: #4ade80; }
+  .badge-cancelled { background: rgba(136,153,166,0.15); color: #8899a6; }
+  .badge-failed { background: rgba(248,113,113,0.15); color: #f87171; }
+
+  /* 主题配置 */
+  .topic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .topic-label { font-size: 11px; color: #8899a6; min-width: 60px; }
+  .topic-value { font-family: 'Courier New', monospace; font-size: 12px; color: #e7e9ea; background: #0f1419; border: 1px solid #38434d; border-radius: 6px; padding: 4px 10px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>🌱 豆沙机 MQTT 测试工具</h1>
+  <p class="subtitle" id="bridgeInfo">正在连接桥接服务...</p>
+
+  <!-- 连接配置 -->
+  <div class="card">
+    <div class="card-title"><span class="dot" id="statusDot"></span> 连接状态</div>
+
+    <div class="topic-row">
+      <span class="topic-label">订阅主题</span>
+      <span class="topic-value" id="reportTopicDisplay">/push/device/selfservice/result/861241058615202</span>
+    </div>
+    <div class="topic-row">
+      <span class="topic-label">下发主题</span>
+      <span class="topic-value" id="sendTopicDisplay">/zayr/device/selfservice/nic9dzyn/861241058615202</span>
+    </div>
+
+    <div class="form-grid" style="margin-top:12px">
+      <div>
+        <label>桥接服务地址</label>
+        <input id="bridgeHost" value="192.168.5.102" placeholder="例: 192.168.5.102">
+      </div>
+      <div>
+        <label>桥接服务端口</label>
+        <input id="bridgePort" value="8788" type="number" placeholder="8788">
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-connect" id="btnConnect" onclick="connect()">连接</button>
+      <button class="btn-disconnect" id="btnDisconnect" onclick="disconnect()" disabled>断开</button>
+    </div>
+
+    <div class="status-row">
+      <div class="status-item">
+        <span>桥接服务：</span>
+        <span class="status-badge badge-gray" id="wsStatus">未连接</span>
+      </div>
+      <div class="status-item">
+        <span>MQTT Broker：</span>
+        <span class="status-badge badge-gray" id="mqttStatus">-</span>
+      </div>
+      <div class="status-item">
+        <span>设备订阅：</span>
+        <span class="status-badge badge-gray" id="subStatus">未订阅</span>
+      </div>
+      <div class="status-item">
+        <span>收到消息：</span>
+        <span class="status-badge badge-gray" id="msgCount">0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设备状态 -->
+  <div class="card">
+    <div class="card-title">📊 设备状态（实时）</div>
+    <div class="device-state">
+      <div class="state-card" id="sc-jiqikongxian">
+        <div class="state-name">机器空闲</div>
+        <div class="state-value" id="v-jiqikongxian">-</div>
+        <div class="state-desc">1=可下发订单</div>
+      </div>
+      <div class="state-card" id="sc-ddsb">
+        <div class="state-name">订单失败</div>
+        <div class="state-value" id="v-ddsb">-</div>
+        <div class="state-desc">1=失败, 0=正常</div>
+      </div>
+      <div class="state-card" id="sc-ddwc">
+        <div class="state-name">订单完成</div>
+        <div class="state-value" id="v-ddwc">-</div>
+        <div class="state-desc">1=完成, 0=正常</div>
+      </div>
+      <div class="state-card warn" id="sc-queliao">
+        <div class="state-name">缺料提醒</div>
+        <div class="state-value" id="v-queliao">-</div>
+        <div class="state-desc">1=缺料, 0=正常</div>
+      </div>
+      <div class="state-card" id="sc-doushazhunbei">
+        <div class="state-name">设备准备中</div>
+        <div class="state-value" id="v-doushazhunbei">-</div>
+        <div class="state-desc">1=启动中, 0=正常</div>
+      </div>
+      <div class="state-card" id="sc-dingdanshoudao">
+        <div class="state-name">订单收到</div>
+        <div class="state-value" id="v-dingdanshoudao">-</div>
+        <div class="state-desc">1=已收到订单</div>
+      </div>
+      <div class="state-card" id="sc-dingdanjiagong">
+        <div class="state-name">机器加工</div>
+        <div class="state-value" id="v-dingdanjiagong">-</div>
+        <div class="state-desc">1=加工中, 0=正常</div>
+      </div>
+      <div class="state-card" id="sc-jiagongdingdanhao">
+        <div class="state-name">当前订单号</div>
+        <div class="state-value" id="v-jiagongdingdanhao">-</div>
+        <div class="state-desc">正在加工的订单号</div>
+      </div>
+      <div class="state-card" id="sc-ts">
+        <div class="state-name">上报时间</div>
+        <div class="state-value" id="v-ts" style="font-size:14px">-</div>
+        <div class="state-desc">设备时间戳</div>
+      </div>
+      <div class="state-card" id="sc-imei">
+        <div class="state-name">IMEI</div>
+        <div class="state-value" id="v-imei" style="font-size:13px">-</div>
+        <div class="state-desc">设备网关编号</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 订单列表 -->
+  <div class="card">
+    <div class="card-title">📋 订单列表 <span id="orderCount" style="font-size:12px;color:#8899a6;font-weight:400">(0 条)</span></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="color:#8899a6;border-bottom:1px solid #38434d;">
+            <th style="padding:6px 10px;text-align:left;">订单号</th>
+            <th style="padding:6px 10px;text-align:left;">状态</th>
+            <th style="padding:6px 10px;text-align:left;">下发时间</th>
+            <th style="padding:6px 10px;text-align:left;">收到时间</th>
+            <th style="padding:6px 10px;text-align:left;">完成时间</th>
+          </tr>
+        </thead>
+        <tbody id="orderListBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 快速下发 -->
+  <div class="card">
+    <div class="card-title">📤 快速下发命令</div>
+    <div class="quick-btns">
+      <button class="quick-btn" id="btnOrder" onclick="sendNewOrder()" disabled>🔥 下发订单 <span id="orderSeqDisplay" style="color:#4ade80;font-weight:700">#1</span></button>
+      <button class="quick-btn" id="btnConfirm" onclick="confirmOrder()" disabled>✅ 订单确认 <span id="confirmSeqDisplay" style="color:#60a5fa;font-weight:700">-</span></button>
+      <button class="quick-btn" id="btnCancel" onclick="cancelOrder()" disabled>❌ 取消订单</button>
+      <button class="quick-btn" onclick="clearLog()">🗑 清空日志</button>
+    </div>
+    <div style="margin-top:14px">
+      <label>自定义下发 Payload（JSON）</label>
+      <textarea id="customPayload" placeholder='{"dingdanqueren":1,"dingdanshuliang":1,"dingdanhao":4}'></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-send" id="btnSendCustom" onclick="sendCustom()" disabled>发送自定义命令</button>
+    </div>
+  </div>
+
+  <!-- 消息日志 -->
+  <div class="card">
+    <div class="card-title">📋 消息日志</div>
+    <div class="log-container" id="logContainer"></div>
+  </div>
+
+</div>
+
+<script>
+  const DEVICE_IMEI = '861241058615202';
+  const REPORT_TOPIC = `/push/device/selfservice/result/${DEVICE_IMEI}`;
+  const SEND_TOPIC = `/zayr/device/selfservice/nic9dzyn/${DEVICE_IMEI}`;
+
+  document.getElementById('reportTopicDisplay').textContent = REPORT_TOPIC;
+  document.getElementById('sendTopicDisplay').textContent = SEND_TOPIC;
+
+  let ws = null;
+  let msgTotal = 0;
+  let orderSeq = 1;
+  let lastOrderNo = 0;
+  let deviceState = {};
+  let orders = [];
+  let reconnectTimer = null;
+  let pingTimer = null;
+  let orderRetryTimer = null;
+  let orderRetryCount = 0;
+  const ORDER_RETRY_MAX = 3;
+  const ORDER_RETRY_MS = 10000;
+
+  function log(msg, type = 'sys') {
+    const container = document.getElementById('logContainer');
+    const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    const div = document.createElement('div');
+    div.className = `log-entry log-${type}`;
+    div.innerHTML = `<span class="log-ts">[${ts}]</span>${msg}`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function clearLog() {
+    document.getElementById('logContainer').innerHTML = '';
+    msgTotal = 0;
+    document.getElementById('msgCount').textContent = '0';
+    document.getElementById('msgCount').className = 'status-badge badge-gray';
+  }
+
+  function setWsStatus(status, badge) {
+    const el = document.getElementById('wsStatus');
+    el.textContent = status;
+    el.className = `status-badge ${badge}`;
+  }
+
+  function setMqttStatus(status, badge) {
+    const el = document.getElementById('mqttStatus');
+    el.textContent = status;
+    el.className = `status-badge ${badge}`;
+  }
+
+  function setSubStatus(status, badge) {
+    const el = document.getElementById('subStatus');
+    el.textContent = status;
+    el.className = `status-badge ${badge}`;
+  }
+
+  function updateDeviceState(data) {
+    const warnFields = ['queliao'];
+    const numFields = ['jiqikongxian','ddsb','ddwc','queliao','doushazhunbei','dingdanshoudao','dingdanjiagong','jiagongdingdanhao'];
+
+    // 只更新本次数据中存在的字段，缺失的保留旧值
+    numFields.forEach(f => {
+      if (data[f] === undefined) return;
+      const val = data[f];
+      const prev = deviceState[f];
+      if (prev === val) return; // 值未变化，不刷新
+      deviceState[f] = val;
+      document.getElementById(`v-${f}`).textContent = val;
+      const card = document.getElementById(`sc-${f}`);
+      card.classList.remove('active', 'warn');
+      if (val == 1) {
+        card.classList.add(warnFields.includes(f) ? 'warn' : 'active');
+      }
+    });
+
+    if (data.ts !== undefined) {
+      deviceState.ts = data.ts;
+      const d = new Date(data.ts * 1000);
+      document.getElementById('v-ts').textContent = d.toLocaleTimeString('zh-CN', { hour12: false });
+    }
+
+    if (data.imei !== undefined) {
+      deviceState.imei = data.imei;
+      document.getElementById('v-imei').textContent = data.imei;
+    }
+
+    // 订单收到，清除重试计时器，更新订单状态
+    if (data.dingdanshoudao == 1) {
+      if (orderRetryTimer) {
+        clearOrderRetryTimer();
+        updateOrderStatus(lastOrderNo, 'received');
+        log(`✅ 订单 #${lastOrderNo} 设备已收到`, 'sys');
+      }
+    }
+
+    // 订单完成
+    if (data.ddwc == 1) {
+      // 找到最近的 pending/received/confirmed 状态的订单，标记为完成
+      for (let i = orders.length - 1; i >= 0; i--) {
+        if (['pending', 'received', 'confirmed'].includes(orders[i].status)) {
+          updateOrderStatus(orders[i].no, 'completed');
+          log(`✅ 订单 #${orders[i].no} 已完成`, 'sys');
+          break;
+        }
+      }
+    }
+
+    updateButtonStates();
+  }
+
+  function updateButtonStates() {
+    const connected = ws && ws.readyState === WebSocket.OPEN;
+    const jiqiIdle = deviceState.jiqikongxian == 1;
+    const orderReceived = deviceState.dingdanshoudao == 1;
+    const hasPendingOrder = lastOrderNo > 0;
+
+    document.getElementById('btnOrder').disabled = !connected || !jiqiIdle;
+    document.getElementById('btnConfirm').disabled = !connected || !orderReceived || !hasPendingOrder;
+    document.getElementById('btnCancel').disabled = !connected || !hasPendingOrder;
+  }
+
+  function renderOrderList() {
+    const tbody = document.getElementById('orderListBody');
+    document.getElementById('orderCount').textContent = `(${orders.length} 条)`;
+    tbody.innerHTML = '';
+    const statusMap = {
+      pending:   { label: '已下发', cls: 'badge-pending' },
+      received:  { label: '已收到', cls: 'badge-received' },
+      confirmed: { label: '已确认', cls: 'badge-confirmed' },
+      completed: { label: '已完成', cls: 'badge-completed' },
+      cancelled: { label: '已取消', cls: 'badge-cancelled' },
+      failed:    { label: '通讯故障', cls: 'badge-failed' },
+    };
+    // 显示最新20条，倒序
+    const show = [...orders].reverse().slice(0, 20);
+    show.forEach(o => {
+      const s = statusMap[o.status] || { label: o.status, cls: 'badge-pending' };
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #1c2732';
+      tr.innerHTML = `
+        <td style="padding:5px 10px;font-family:'Courier New',monospace;color:#60a5fa;font-weight:600;">#${o.no}</td>
+        <td style="padding:5px 10px;"><span class="order-badge ${s.cls}">${s.label}</span></td>
+        <td style="padding:5px 10px;color:#8899a6;">${o.sendTime || '-'}</td>
+        <td style="padding:5px 10px;color:#8899a6;">${o.recvTime || '-'}</td>
+        <td style="padding:5px 10px;color:#8899a6;">${o.endTime || '-'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    if (orders.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="5" style="padding:12px 10px;text-align:center;color:#8899a6;">暂无订单记录</td>';
+      tbody.appendChild(tr);
+    }
+  }
+
+  function updateOrderStatus(no, status) {
+    const o = orders.find(x => x.no === no);
+    if (!o) return;
+    o.status = status;
+    const now = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    if (status === 'received')  o.recvTime = now;
+    if (status === 'confirmed') o.confirmTime = now;
+    if (status === 'completed') o.endTime = now;
+    if (status === 'cancelled' || status === 'failed') o.endTime = now;
+    renderOrderList();
+  }
+
+  function doConnect() {
+    const host = document.getElementById('bridgeHost').value.trim();
+    const port = document.getElementById('bridgePort').value.trim();
+    const url = `ws://${host}:${port}`;
+
+    document.getElementById('bridgeInfo').textContent = `正在连接 ${url} ...`;
+    setWsStatus('连接中', 'badge-gray');
+    log(`正在连接桥接服务 ${url} ...`);
+
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      document.getElementById('bridgeInfo').textContent = `已连接 ${url}`;
+      log(`✅ 桥接服务已连接`);
+      pingTimer = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 25000);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        switch (msg.type) {
+          case 'connected':
+            setMqttStatus('已连接', 'badge-green');
+            setWsStatus('已连接', 'badge-green');
+            lastOrderNo = 0;
+            document.getElementById('btnConnect').disabled = true;
+            document.getElementById('btnDisconnect').disabled = false;
+            document.getElementById('btnOrder').disabled = true;
+            document.getElementById('btnConfirm').disabled = true;
+            document.getElementById('btnCancel').disabled = false;
+            document.getElementById('btnSendCustom').disabled = false;
+            log(`✅ MQTT Broker 已连接`);
+            // 自动订阅设备上报主题
+            ws.send(JSON.stringify({ type: 'subscribe', topic: REPORT_TOPIC, qos: 1 }));
+            break;
+
+          case 'subscribed':
+            setSubStatus('已订阅', 'badge-green');
+            const dot = document.getElementById('statusDot');
+            dot.className = 'dot active';
+            log(`📥 已订阅: ${msg.topic}`, 'sub');
+            break;
+
+          case 'unsubscribed':
+            setSubStatus('未订阅', 'badge-gray');
+            log(`📭 已取消订阅: ${msg.topic}`, 'sys');
+            break;
+
+          case 'message':
+            msgTotal++;
+            document.getElementById('msgCount').textContent = msgTotal;
+            document.getElementById('msgCount').className = 'status-badge badge-green';
+            log(`📨 [${msg.topic}] ${msg.payload}`, 'recv');
+            try {
+              const data = JSON.parse(msg.payload);
+              updateDeviceState(data);
+            } catch(e) {}
+            break;
+
+          case 'published':
+            log(`📤 已下发: ${msg.payload}`, 'sent');
+            break;
+
+          case 'error':
+            log(`❌ ${msg.msg}`, 'error');
+            break;
+
+          case 'offline':
+            setMqttStatus('离线', 'badge-gray');
+            log(`⚠️ MQTT 离线`, 'sys');
+            break;
+
+          case 'pong':
+            break;
+        }
+      } catch(e) {
+        log(`⚠️ 消息解析异常: ${e.message}`, 'sys');
+      }
+    };
+
+    ws.onclose = () => {
+      clearInterval(pingTimer);
+      clearInterval(reconnectTimer);
+      setWsStatus('已断开', 'badge-gray');
+      setMqttStatus('-', 'badge-gray');
+      setSubStatus('未订阅', 'badge-gray');
+      document.getElementById('btnConnect').disabled = false;
+      document.getElementById('btnDisconnect').disabled = true;
+      document.getElementById('btnOrder').disabled = true;
+      document.getElementById('btnConfirm').disabled = true;
+      document.getElementById('btnCancel').disabled = true;
+      document.getElementById('btnSendCustom').disabled = true;
+      document.getElementById('statusDot').className = 'dot';
+      log(`❌ 桥接服务连接断开（5秒后自动重连）`, 'error');
+      reconnectTimer = setTimeout(() => {
+        if (document.getElementById('btnConnect').disabled === false) {
+          log(`🔄 自动重连中...`, 'sys');
+          doConnect();
+        }
+      }, 5000);
+    };
+
+    ws.onerror = (err) => {
+      setWsStatus('错误', 'badge-red');
+      log(`❌ WebSocket 错误: 连接失败`, 'error');
+      document.getElementById('bridgeInfo').textContent = `连接失败，请检查桥接服务是否启动`;
+    };
+  }
+
+  function connect() {
+    doConnect();
+  }
+
+  function disconnect() {
+    clearInterval(reconnectTimer);
+    clearOrderRetryTimer();
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    orderSeq = 1;
+    lastOrderNo = 0;
+    document.getElementById('orderSeqDisplay').textContent = '#1';
+    document.getElementById('confirmSeqDisplay').textContent = '-';
+    setWsStatus('已断开', 'badge-gray');
+    setMqttStatus('-', 'badge-gray');
+    setSubStatus('未订阅', 'badge-gray');
+    document.getElementById('bridgeInfo').textContent = `已断开连接`;
+    document.getElementById('btnConnect').disabled = false;
+    document.getElementById('btnDisconnect').disabled = true;
+    document.getElementById('btnOrder').disabled = true;
+    document.getElementById('btnConfirm').disabled = true;
+    document.getElementById('btnCancel').disabled = true;
+    document.getElementById('btnSendCustom').disabled = true;
+    document.getElementById('statusDot').className = 'dot';
+    log(`👋 已断开连接`, 'sys');
+  }
+
+  function doSend(payload) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      log(`❌ 未连接，请先点击「连接」`, 'error');
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'publish', topic: SEND_TOPIC, payload: JSON.stringify(payload), qos: 1 }));
+  }
+
+  function startOrderRetryTimer() {
+    clearOrderRetryTimer();
+    orderRetryCount = 0;
+    orderRetryTimer = setTimeout(handleOrderRetry, ORDER_RETRY_MS);
+    log(`⏱ 等待设备响应（${ORDER_RETRY_MS/1000}秒），第 ${orderRetryCount + 1}/${ORDER_RETRY_MAX} 次`, 'sys');
+  }
+
+  function clearOrderRetryTimer() {
+    if (orderRetryTimer) {
+      clearTimeout(orderRetryTimer);
+      orderRetryTimer = null;
+    }
+  }
+
+  function handleOrderRetry() {
+    orderRetryCount++;
+    if (orderRetryCount >= ORDER_RETRY_MAX) {
+      log(`❌ 机器通讯故障：订单 #${lastOrderNo} 多次无响应，已取消`, 'error');
+      cancelOrderInternal('failed');
+      return;
+    }
+    log(`⚠️ 订单 #${lastOrderNo} 无响应，第 ${orderRetryCount + 1}/${ORDER_RETRY_MAX} 次重发...`, 'sys');
+    doSend({
+      dingdanshuliang: 1,
+      dingdanhao: lastOrderNo
+    });
+    orderRetryTimer = setTimeout(handleOrderRetry, ORDER_RETRY_MS);
+  }
+
+  function cancelOrderInternal(reason = 'cancelled') {
+    clearOrderRetryTimer();
+    const no = lastOrderNo;
+    lastOrderNo = 0;
+    document.getElementById('confirmSeqDisplay').textContent = '-';
+    if (no > 0) updateOrderStatus(no, reason);
+    updateButtonStates();
+  }
+
+  function sendNewOrder() {
+    const no = orderSeq++;
+    lastOrderNo = no;
+    deviceState.dingdanshoudao = 0;
+    document.getElementById('v-dingdanshoudao').textContent = '0';
+    document.getElementById('sc-dingdanshoudao').classList.remove('active');
+    document.getElementById('orderSeqDisplay').textContent = `#${orderSeq}`;
+    document.getElementById('confirmSeqDisplay').textContent = `#${no}`;
+    const now = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    orders.push({ no, status: 'pending', sendTime: now, recvTime: null, confirmTime: null, endTime: null });
+    renderOrderList();
+    updateButtonStates();
+    startOrderRetryTimer();
+    doSend({
+      dingdanshuliang: 1,
+      dingdanhao: no
+    });
+  }
+
+  function confirmOrder() {
+    if (lastOrderNo === 0) {
+      log('❌ 还没有下发烧纸，无法确认', 'error');
+      return;
+    }
+    clearOrderRetryTimer();
+    updateOrderStatus(lastOrderNo, 'confirmed');
+    doSend({
+      dingdanqueren: 1,
+      dingdanshuliang: 1,
+      dingdanhao: lastOrderNo
+    });
+  }
+
+  function cancelOrder() {
+    if (lastOrderNo === 0) {
+      log('❌ 还没有下发烧纸，无法取消', 'error');
+      return;
+    }
+    cancelOrderInternal();
+    doSend({
+      dingdanqueren: 0,
+      dingdanshuliang: 0,
+      dingdanhao: lastOrderNo
+    });
+  }
+
+  function sendCustom() {
+    const raw = document.getElementById('customPayload').value.trim();
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw);
+      doSend(payload);
+    } catch(e) {
+      log(`❌ JSON 格式错误: ${e.message}`, 'error');
+    }
+  }
+
+  log(`🌱 MQTT 测试工具已就绪，正在自动连接...`, 'sys');
+  setTimeout(doConnect, 500);
+</script>
+</body>
+</html>
