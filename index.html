@@ -123,11 +123,11 @@
     <div class="form-grid" style="margin-top:12px">
       <div>
         <label>桥接服务地址</label>
-        <input id="bridgeHost" value="192.168.5.102" placeholder="例: 192.168.5.102">
+        <input id="bridgeHost" value="120.46.240.61" placeholder="例: 192.168.5.102">
       </div>
       <div>
-        <label>桥接服务端口</label>
-        <input id="bridgePort" value="8788" type="number" placeholder="8788">
+        <label>桥接服务路径</label>
+        <input id="bridgePath" value="/mqtt-ws" placeholder="/mqtt-ws">
       </div>
     </div>
 
@@ -427,8 +427,8 @@
 
   function doConnect() {
     const host = document.getElementById('bridgeHost').value.trim();
-    const port = document.getElementById('bridgePort').value.trim();
-    const url = `ws://${host}:${port}`;
+    const path = document.getElementById('bridgePath').value.trim();
+    const url = `ws://${host}${path}`;
 
     document.getElementById('bridgeInfo').textContent = `正在连接 ${url} ...`;
     setWsStatus('连接中', 'badge-gray');
